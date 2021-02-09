@@ -3,6 +3,7 @@ package com.r307.arbitrader.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r307.arbitrader.Utils;
 import com.r307.arbitrader.config.TradingConfiguration;
+import com.r307.arbitrader.service.exchange.EnhancedExchange;
 import com.r307.arbitrader.service.model.ActivePosition;
 import com.r307.arbitrader.service.paper.PaperExchange;
 import com.r307.arbitrader.service.model.Spread;
@@ -138,7 +139,7 @@ public class TradingScheduler {
             if(tradingConfiguration.getPaper() != null && tradingConfiguration.getPaper().isActive()) {
                 exchange=new PaperExchange(exchange, exchangeMetadata.getHomeCurrency(), tickerService, exchangeService, tradingConfiguration.getPaper());
             }
-            exchanges.add(exchange);
+            exchanges.add(new EnhancedExchange(exchange));
         });
 
         // call setUpExchange on every exchange

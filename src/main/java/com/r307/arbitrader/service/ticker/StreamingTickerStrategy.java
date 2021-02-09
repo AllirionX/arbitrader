@@ -67,7 +67,7 @@ public class StreamingTickerStrategy implements TickerStrategy {
             .stream()
             .map(pair -> {
                 final CurrencyPair currencyPair = exchangeService.convertExchangePair(exchange, pair);
-                final List<Object> tickerArguments = exchangeService.getExchangeMetadata(exchange).getTickerArguments();
+                final List<Object> tickerArguments = exchangeService.getExchangeConfiguration(exchange).getTickerArguments();
 
                 return exchange.getStreamingMarketDataService().getTicker(currencyPair, tickerArguments.toArray())
                     .doOnNext(ticker -> log(exchange, ticker))

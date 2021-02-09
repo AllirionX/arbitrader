@@ -470,7 +470,7 @@ public class TradingService {
 
     // if feeComputation == CLIENT we want to compute the fees and add them to the volume
     private BigDecimal addFees(Exchange exchange, CurrencyPair currencyPair, BigDecimal volume, boolean isShortFee) {
-        if (exchangeService.getExchangeMetadata(exchange).getFeeComputation().equals(FeeComputation.CLIENT)) {
+        if (exchangeService.getExchangeConfiguration(exchange).getFeeComputation().equals(FeeComputation.CLIENT)) {
             final ExchangeFee exchangeFee = exchangeService.getExchangeFee(exchange, currencyPair, true);
 
             if (isShortFee && !exchangeFee.getShortFee().isPresent()) {
@@ -500,7 +500,7 @@ public class TradingService {
 
     // if feeComputation == CLIENT we want to compute the fees and subtract them from the volume
     private BigDecimal subtractFees(Exchange exchange, CurrencyPair currencyPair, BigDecimal volume, boolean isShortFee) {
-        if (exchangeService.getExchangeMetadata(exchange).getFeeComputation().equals(FeeComputation.CLIENT)) {
+        if (exchangeService.getExchangeConfiguration(exchange).getFeeComputation().equals(FeeComputation.CLIENT)) {
             final ExchangeFee exchangeFee = exchangeService.getExchangeFee(exchange, currencyPair, true);
 
             if (isShortFee && !exchangeFee.getShortFee().isPresent()) {
@@ -587,8 +587,14 @@ public class TradingService {
 
     }
 
-    // get volume for an entry position considering exposure and exchange step size if there is one
-    private BigDecimal getVolumeForEntryPosition(BigDecimal maxExposure, BigDecimal price, int scale) {
+    // get the volume to trade on the long exchange
+    private BigDecimal getVolumeForLongTrade(BigDecimal shortVolume, BigDecimal shortFee, BigDecimal longFee, int scale) {
+        // see https://github.com/scionaltera/arbitrader/issues/325
+        return shortVolume.multiply(BigDecimal.ONE.add(shortFee)).divide(BigDecimal.ONE.subtract(longFee), scale, RoundingMode.HALF_EVEN);
+    }
+
+    // get volume to trade on the short exchange
+    private BigDecimal getVolumeForShortTrade(BigDecimal maxExposure, BigDecimal price, int scale) {
         return maxExposure.divide(price, scale, RoundingMode.HALF_EVEN);
     }
 

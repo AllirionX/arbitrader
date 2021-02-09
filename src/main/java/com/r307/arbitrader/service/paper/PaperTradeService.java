@@ -4,13 +4,13 @@ import com.r307.arbitrader.config.ExchangeConfiguration;
 import com.r307.arbitrader.config.PaperConfiguration;
 import com.r307.arbitrader.service.ExchangeService;
 import com.r307.arbitrader.service.TickerService;
+import com.r307.arbitrader.service.exchange.AbstractTradeServiceAdapter;
 import com.r307.arbitrader.service.model.ExchangeFee;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.dto.Order;
 import org.knowm.xchange.dto.marketdata.Ticker;
 import org.knowm.xchange.dto.marketdata.Trades;
 import org.knowm.xchange.dto.trade.*;
-import org.knowm.xchange.service.BaseExchangeService;
 import org.knowm.xchange.service.trade.TradeService;
 import org.knowm.xchange.service.trade.params.TradeHistoryParams;
 import org.knowm.xchange.service.trade.params.orders.OpenOrdersParams;
@@ -25,20 +25,20 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class PaperTradeService extends BaseExchangeService<PaperExchange> implements TradeService {
+public class PaperTradeService extends AbstractTradeServiceAdapter implements TradeService {
     private static final Logger LOGGER = LoggerFactory.getLogger(PaperTradeService.class);
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
+    private final PaperExchange paperExchange;
     private final boolean autoFill;
     private final TickerService tickerService;
     private final ExchangeService exchangeService;
-    private final TradeService tradeService;
     private final List<LimitOrder> orders= new ArrayList<>();
     private final UserTrades userTrades = new UserTrades (new ArrayList<>(), Trades.TradeSortType.SortByTimestamp);
 
     public PaperTradeService(PaperExchange exchange, TradeService tradeService, TickerService tickerService, ExchangeService exchangeService, PaperConfiguration paper) {
-        super(exchange);
-        this.tradeService=tradeService;
+        super(tradeService);
+        this.paperExchange= exchange;
         this.autoFill = paper.isAutoFill();
         this.tickerService=tickerService;
         this.exchangeService=exchangeService;
@@ -67,7 +67,7 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
         orders.add(limit);
 
         LOGGER.info("{} paper exchange: order {} for currency pair {} placed with limit {} and amount {}",
-            exchange.getExchangeSpecification().getExchangeName(),
+            paperExchange.getExchangeSpecification().getExchangeName(),
             limit.getId(),
             limit.getCurrencyPair(),
             limit.getLimitPrice(),
@@ -81,13 +81,13 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
         Optional<Order> optionalOrder = getOrder(orderId).stream().findFirst();
         if(!optionalOrder.isPresent()) {
             LOGGER.warn("{} paper exchange: order {} to cancel not found.",
-                exchange.getExchangeSpecification().getExchangeName(),
+                paperExchange.getExchangeSpecification().getExchangeName(),
                 orderId);
             return false;
         }
         if(optionalOrder.get().getStatus().isOpen()) {
             LOGGER.warn("{} paper exchange: cannot cancel order {} because order is not open.",
-                exchange.getExchangeSpecification().getExchangeName(),
+                paperExchange.getExchangeSpecification().getExchangeName(),
                 orderId);
             return false;
         }
@@ -97,14 +97,6 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
 
     public UserTrades getTradeHistory(TradeHistoryParams params) {
         return userTrades;
-    }
-
-    public TradeHistoryParams createTradeHistoryParams() {
-        return tradeService.createTradeHistoryParams();
-    }
-
-    public OpenOrdersParams createOpenOrdersParams() {
-        return tradeService.createOpenOrdersParams();
     }
 
     public void verifyOrder(LimitOrder limitOrder) {
@@ -136,7 +128,7 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
                     fillOrder(order);
                 } else {
                     Order.OrderType type = order.getType();
-                    Ticker ticker = tickerService.getTicker(exchange, order.getCurrencyPair());
+                    Ticker ticker = tickerService.getTicker(paperExchange, order.getCurrencyPair());
 
                     LOGGER.debug("Ticker fetch for paper trading: {}/{}", ticker.getBid(), ticker.getAsk());
 
@@ -152,9 +144,9 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
 
 
     private void fillOrder(LimitOrder order) {
-        final ExchangeFee exchangeFee = exchangeService.getExchangeFee(exchange, order.getCurrencyPair(), false);
-        final String exchangeName = exchange.getExchangeSpecification().getExchangeName();
-        final ExchangeConfiguration exchangeConfiguration = exchangeService.getExchangeMetadata(exchange);
+        final ExchangeFee exchangeFee = exchangeService.getExchangeFee(paperExchange, order.getCurrencyPair(), false);
+        final String exchangeName = paperExchange.getExchangeSpecification().getExchangeName();
+        final ExchangeConfiguration exchangeConfiguration = exchangeService.getExchangeConfiguration(paperExchange);
 
         // If leverage is empty it means it is a long order. If it is NOT empty then it is a short order
         if (order.getLeverage() != null && !order.getLeverage().isEmpty() && !exchangeFee.getShortFee().isPresent()) {
@@ -185,12 +177,12 @@ public class PaperTradeService extends BaseExchangeService<PaperExchange> implem
 
         if(order.getType()== Order.OrderType.ASK) {
             //Sell order
-            exchange.getPaperAccountService().setBalance(exchange.getPaperAccountService().getBalance().add(order.getCumulativeCounterAmount()));
+            paperExchange.getPaperAccountService().setBalance(paperExchange.getPaperAccountService().getBalance().add(order.getCumulativeCounterAmount()));
         } else {
-            exchange.getPaperAccountService().setBalance(exchange.getPaperAccountService().getBalance().subtract(order.getCumulativeCounterAmount()));
+            paperExchange.getPaperAccountService().setBalance(paperExchange.getPaperAccountService().getBalance().subtract(order.getCumulativeCounterAmount()));
         }
-        exchange.getPaperAccountService().setBalance(exchange.getPaperAccountService().getBalance().subtract(order.getFee()));
-        LOGGER.info("{} paper account: new balance is {}", exchangeName, exchange.getPaperAccountService().getBalance());
+        paperExchange.getPaperAccountService().setBalance(paperExchange.getPaperAccountService().getBalance().subtract(order.getFee()));
+        LOGGER.info("{} paper account: new balance is {}", exchangeName, paperExchange.getPaperAccountService().getBalance());
         userTrades.getUserTrades().add(new UserTrade(order.getType(), order.getOriginalAmount(),
             order.getInstrument(),
             order.getLimitPrice(),

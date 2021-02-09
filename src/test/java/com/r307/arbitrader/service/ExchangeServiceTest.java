@@ -40,7 +40,7 @@ public class ExchangeServiceTest {
 
     @Test
     public void testExchangeMetadata() {
-        ExchangeConfiguration configuration = exchangeService.getExchangeMetadata(exchange);
+        ExchangeConfiguration configuration = exchangeService.getExchangeConfiguration(exchange);
 
         assertNotNull(configuration);
     }

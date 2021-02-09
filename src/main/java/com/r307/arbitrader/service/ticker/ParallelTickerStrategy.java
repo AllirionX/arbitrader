@@ -121,12 +121,12 @@ public class ParallelTickerStrategy implements TickerStrategy {
     // return the batchDelay configuration parameter
     // you can increase this to slow down if you're getting rate limited
     private Integer getTickerExchangeDelay(Exchange exchange) {
-        return exchangeService.getExchangeMetadata(exchange).getTicker().get("batchDelay");
+        return exchangeService.getExchangeConfiguration(exchange).getTicker().get("batchDelay");
     }
 
     // the size of the partition is based on how many tickers we have for this exchange
     private Map<String, Integer> getTickerPartitionSize(Exchange exchange) {
-        return exchangeService.getExchangeMetadata(exchange).getTicker();
+        return exchangeService.getExchangeConfiguration(exchange).getTicker();
     }
 
     @Override

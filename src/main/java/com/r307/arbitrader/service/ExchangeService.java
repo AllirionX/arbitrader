@@ -54,7 +54,7 @@ public class ExchangeService {
      * @param exchange The Exchange to pull information from.
      * @return The ExchangeConfiguration object for the Exchange.
      */
-    public ExchangeConfiguration getExchangeMetadata(Exchange exchange) {
+    public ExchangeConfiguration getExchangeConfiguration(Exchange exchange) {
         return (ExchangeConfiguration) exchange.getExchangeSpecification().getExchangeSpecificParametersItem(METADATA_KEY);
     }
 
@@ -65,7 +65,7 @@ public class ExchangeService {
      * @return The home currency for the Exchange.
      */
     public Currency getExchangeHomeCurrency(Exchange exchange) {
-        return getExchangeMetadata(exchange).getHomeCurrency();
+        return getExchangeConfiguration(exchange).getHomeCurrency();
     }
 
     /**
@@ -127,7 +127,7 @@ public class ExchangeService {
             try {
                 // attempt to fetch multiple tickers in one call from the exchange
                 // if this works, we can use the single call strategy to fetch all tickers in one API call
-                CurrencyPairsParam param = () -> getExchangeMetadata(exchange).getTradingPairs().subList(0, 1);
+                CurrencyPairsParam param = () -> getExchangeConfiguration(exchange).getTradingPairs().subList(0, 1);
                 exchange.getMarketDataService().getTickers(param);
 
                 final TickerStrategy singleCallTickerStrategy = tickerStrategyProvider.getSingleCallTickerStrategy(this);
@@ -241,7 +241,7 @@ public class ExchangeService {
             return cachedFee.get();
         }
 
-        final ExchangeConfiguration exchangeMetadata = getExchangeMetadata(exchange);
+        final ExchangeConfiguration exchangeMetadata = getExchangeConfiguration(exchange);
 
         // Get the margin (short) fee configured for this exchange
         final BigDecimal shortFee = getShortFee(exchangeMetadata);

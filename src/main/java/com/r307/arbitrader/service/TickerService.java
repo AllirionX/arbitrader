@@ -60,8 +60,8 @@ public class TickerService {
         exchanges.forEach(longExchange -> exchanges.forEach(shortExchange -> {
             // get the currency pairs common to both exchanges
             Collection<CurrencyPair> currencyPairs = CollectionUtils.intersection(
-                exchangeService.getExchangeMetadata(longExchange).getTradingPairs(),
-                exchangeService.getExchangeMetadata(shortExchange).getTradingPairs());
+                exchangeService.getExchangeConfiguration(longExchange).getTradingPairs(),
+                exchangeService.getExchangeConfiguration(shortExchange).getTradingPairs());
 
             // check each pair to see if it is a valid combination
             currencyPairs.forEach(currencyPair -> {
@@ -228,12 +228,12 @@ public class TickerService {
         }
 
         // the "short" exchange doesn't support margin
-        if (!exchangeService.getExchangeMetadata(shortExchange).getMargin()) {
+        if (!exchangeService.getExchangeConfiguration(shortExchange).getMargin()) {
             return true;
         }
 
         // the "short" exchange doesn't support margin on this currency pair
-        if (exchangeService.getExchangeMetadata(shortExchange).getMarginExclude().contains(currencyPair)) {
+        if (exchangeService.getExchangeConfiguration(shortExchange).getMarginExclude().contains(currencyPair)) {
             return true;
         }
 
