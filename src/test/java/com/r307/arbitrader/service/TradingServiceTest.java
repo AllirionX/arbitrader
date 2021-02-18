@@ -1,16 +1,13 @@
 package com.r307.arbitrader.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.r307.arbitrader.DecimalConstants;
+import com.r307.arbitrader.BaseTestCase;
 import com.r307.arbitrader.ExchangeBuilder;
 import com.r307.arbitrader.config.JsonConfiguration;
 import com.r307.arbitrader.config.NotificationConfiguration;
 import com.r307.arbitrader.exception.OrderNotFoundException;
 import com.r307.arbitrader.config.TradingConfiguration;
 import com.r307.arbitrader.service.model.ArbitrageLog;
-import com.r307.arbitrader.service.ticker.ParallelTickerStrategy;
-import com.r307.arbitrader.service.ticker.SingleCallTickerStrategy;
-import com.r307.arbitrader.service.ticker.TickerStrategy;
 import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -18,13 +15,7 @@ import org.knowm.xchange.Exchange;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order;
-import org.knowm.xchange.dto.marketdata.OrderBook;
-import org.knowm.xchange.dto.trade.LimitOrder;
-import org.knowm.xchange.instrument.Instrument;
-import org.knowm.xchange.service.marketdata.MarketDataService;
 import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import java.io.File;
@@ -32,14 +23,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static com.r307.arbitrader.DecimalConstants.BTC_SCALE;
 import static com.r307.arbitrader.DecimalConstants.USD_SCALE;
@@ -47,7 +32,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.*;
 
-public class TradingServiceTest {
+public class TradingServiceTest extends BaseTestCase {
     private static final CurrencyPair currencyPair = new CurrencyPair("BTC/USD");
     private static final int CSV_NUMBER_OF_COLUMNS = 12;
 
@@ -58,14 +43,14 @@ public class TradingServiceTest {
 
     @Mock
     private ExchangeService exchangeService;
-    private SpreadService spreadService;
 
     @Mock
+    private SpreadService spreadService;
+
     private TradingService tradingService;
 
     @Before
     public void setUp() throws IOException {
-        MockitoAnnotations.initMocks(this);
         final JavaMailSender javaMailSenderMock = mock(JavaMailSender.class);
 
         ObjectMapper objectMapper = new JsonConfiguration().objectMapper();
@@ -78,7 +63,7 @@ public class TradingServiceTest {
             new TradingConfiguration(),
             exchangeService,
             errorCollectorService);
-        spreadService = new SpreadService(tickerService);
+        spreadService = new SpreadService(tradingConfiguration, tickerService);
         NotificationServiceImpl notificationService = new NotificationServiceImpl(javaMailSenderMock, notificationConfiguration);
         tradingConfiguration = new TradingConfiguration();
 
@@ -101,7 +86,6 @@ public class TradingServiceTest {
             conditionService,
             exchangeService,
             spreadService,
-            tickerService,
             notificationService));
     }
 

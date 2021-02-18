@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.r307.arbitrader.Utils;
 import com.r307.arbitrader.config.TradingConfiguration;
 import com.r307.arbitrader.service.model.ActivePosition;
+import com.r307.arbitrader.service.paper.PaperExchange;
 import com.r307.arbitrader.service.model.Spread;
 import com.r307.arbitrader.service.model.TradeCombination;
+import com.r307.arbitrader.service.paper.PaperStreamExchange;
+import info.bitrich.xchangestream.core.StreamingExchange;
 import info.bitrich.xchangestream.core.StreamingExchangeFactory;
 import org.knowm.xchange.Exchange;
 import org.knowm.xchange.ExchangeFactory;
@@ -76,7 +79,7 @@ public class TradingScheduler {
                 return;
             }
 
-            Class<Exchange> exchangeClass;
+            Class<? extends Exchange> exchangeClass;
 
             try {
                 // try to load the exchange class
@@ -128,11 +131,24 @@ public class TradingScheduler {
             specification.setExchangeSpecificParametersItem(METADATA_KEY, exchangeMetadata);
 
             // Decide whether to create a streaming exchange or a normal one based on the class name.
-            if (specification.getExchangeClass().getSimpleName().contains("Streaming")) {
-                exchanges.add(StreamingExchangeFactory.INSTANCE.createExchange(specification));
+            Exchange exchange;
+            if(specification.getExchangeClass().getSimpleName().contains("Streaming")) {
+                exchange = StreamingExchangeFactory.INSTANCE.createExchange(specification);
             } else {
-                exchanges.add(ExchangeFactory.INSTANCE.createExchange(specification));
+                exchange = ExchangeFactory.INSTANCE.createExchange(specification);
             }
+
+            // If paper trading is enabled then wrap the current exchange config into a PaperExchange or PaperStreamingExchange
+            if(tradingConfiguration.getPaper() != null && tradingConfiguration.getPaper().isActive()) {
+                if(specification.getExchangeClass().getSimpleName().contains("Streaming")) {
+                    exchange = new PaperStreamExchange((StreamingExchange) exchange, exchangeMetadata.getHomeCurrency(), tickerService, exchangeService,
+                        tradingConfiguration.getPaper()
+                    );
+                } else {
+                    exchange = new PaperExchange(exchange, exchangeMetadata.getHomeCurrency(), tickerService, exchangeService, tradingConfiguration.getPaper());
+                }
+            }
+            exchanges.add(exchange);
         });
 
         // call setUpExchange on every exchange
@@ -149,6 +165,10 @@ public class TradingScheduler {
         // tell the user whether trade timeout is configured
         if (tradingConfiguration.getTradeTimeout() != null) {
             LOGGER.info("Using trade timeout of {} hours", tradingConfiguration.getTradeTimeout());
+        }
+
+        if (tradingConfiguration.getPaper() != null && tradingConfiguration.getPaper().isActive()) {
+            LOGGER.info("Paper trading enabled, will NOT trade real money");
         }
 
         // load active trades from file, if there is one
@@ -192,7 +212,7 @@ public class TradingScheduler {
     public void summary() {
         LOGGER.info("Summary: [Long/Short Exchanges] [Pair] [Current Spread] -> [{} Spread Target]", (tradingService.getActivePosition() != null ? "Exit" : "Entry"));
 
-        List<TradeCombination> tradeCombinations = tickerService.getPollingExchangeTradeCombinations();
+        List<TradeCombination> tradeCombinations = tickerService.getExchangeTradeCombinations();
 
         tradeCombinations.forEach(tradeCombination -> {
             Spread spread = spreadService.computeSpread(tradeCombination);
@@ -224,7 +244,8 @@ public class TradingScheduler {
     }
 
     /**
-     * Periodically check whether the bot should perform a few routine tasks.
+     * Periodically update tickers and check for other special tasks such as exiting early or displaying
+     * a status report due to a request from the user.
      */
     @Scheduled(initialDelay = 5000, fixedRate = 3000)
     public void pollForPriceData() {
@@ -244,41 +265,24 @@ public class TradingScheduler {
             conditionService.clearStatusCondition();
         }
 
-        // fetch tickers for all exchanges and currencies
-        tickerService.refreshTickers();
-
         long exchangePollStartTime = System.currentTimeMillis();
 
-        // analyze prices for possible trades
-        startTradingProcess();
+        // fetch tickers for all exchanges and currencies
+        tickerService.refreshTickers();
 
         long exchangePollDuration = System.currentTimeMillis() - exchangePollStartTime;
 
         // measure the time we took to analyze prices
         if (exchangePollDuration > 3000) {
-            LOGGER.warn("Polling exchanges took {} ms", exchangePollDuration);
+            LOGGER.warn("Refreshing tickers took {} ms", exchangePollDuration);
         }
-    }
-
-    /**
-     * Analyze prices to see if we need to trade.
-     */
-    public void startTradingProcess() {
-        tickerService.getPollingExchangeTradeCombinations()
-            .forEach(tradeCombination -> {
-                Spread spread = spreadService.computeSpread(tradeCombination);
-
-                if (spread != null) {
-                    tradingService.trade(spread);
-                }
-        });
     }
 
     // print a summary of all trade combinations, prices, and spreads
     private void logStatus() {
         LOGGER.info("=== Current Status ===");
 
-        tickerService.getPollingExchangeTradeCombinations()
+        tickerService.getExchangeTradeCombinations()
             .stream()
             .sorted(Comparator.comparing(o ->
                 o.getLongExchange().getExchangeSpecification().getExchangeName()
